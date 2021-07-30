@@ -1,0 +1,79 @@
+---
+title: "Fitbit data analyze hourly"
+output: html_notebook
+author: "Ken"
+date: '2021-07-29'
+---
+
+## Loading common packages and libraries
+
+```{r load_ibraries}
+library(tidyverse)
+```
+
+## Loading CSV files
+
+```{r load_csv}
+hourly <- read_csv('../Cleaned_data/Hourly_merged_v0.2.csv')
+```
+## Exploring the table
+```{r}
+head(hourly)
+```
+**Have a look at the table structure:**
+```{r}
+glimpse(hourly)
+```
+Compared with the daily table, hourly table has less columns. First, let's see some statistical information:
+```{r}
+hourly %>% select(TotalIntensity, AverageIntensity, Calories, StepTotal) %>% 
+  summary()
+```
+Then, let's see the statistical information grouped by hour:
+```{r}
+mean_by_hour <- hourly %>% group_by(ActivityHour) %>% 
+  summarize(mean_intensity = mean(TotalIntensity), mean_calories = mean(Calories), mean_step = mean(StepTotal))
+mean_by_hour
+```
+
+
+
+## Relationship and Plotting
+It's easy to think that `StepTotal` has a linear relationship with `Calories`. Let's see that:
+```{r}
+hourly %>% ggplot(aes(x = StepTotal, y = Calories)) + geom_point() + geom_smooth()
+```
+The graph confirms our assumption that generally these two variables have a linear relationship.
+
+
+We checked the statistical information grouped by hour above. For a better view, let's plot them in the visualization together:
+```{r}
+colors <- c('mean_intensity'='red', 'mean_calories'='blue', 'mean_step'='green')
+mean_by_hour %>% ggplot(aes(x = ActivityHour)) + 
+  geom_point(aes(y = mean_intensity, color='mean_intensity')) + geom_smooth(aes(x = ActivityHour, y = mean_intensity, color='mean_intensity'))  + 
+  geom_point(aes(y = mean_calories, color='mean_calories')) + geom_smooth(aes(x = ActivityHour, y = mean_calories, color='mean_calories')) + 
+  geom_point(aes(y = mean_step, color='mean_step')) + geom_smooth(aes(x = ActivityHour, y = mean_step, color='mean_step')) +
+  labs(x = "Hour", y = "Value", color = "Legend") +
+    scale_color_manual(values = colors)
+```
+As shown in the plot, the mean steps are concentrated between 8:00 and 17:00, whereas mean intensity and calories keep stable all day.
+
+But if we plot it inside the box plot, we could find out that most of the steps recorded during a day is stable, just like the mean_calories or mean_intensity above. What makes the mean_step high is the big outliers, which means high-intensity exercises occurred during that periods.
+```{r}
+ggplot(hourly, aes(x = paste0(ActivityHour), y = StepTotal, fill = ActivityHour)) +
+  geom_boxplot(outlier.size = 0.3) + 
+  theme(axis.text.x = element_text(angle = 45)) + 
+  labs(x = "ActivityHour")
+```
+
+
+To show the relationship among participants, hour and mean steps, we plot them in a heatmap:
+```{r}
+hourly %>% group_by(Id, ActivityHour) %>% summarise(mean_step = mean(StepTotal)) %>% 
+ggplot(aes(x = substring(paste0(ActivityHour),1,2), y = paste0(Id), fill = mean_step)) +
+  geom_tile() + 
+  theme(axis.text.x = element_text(angle = 45)) + 
+  labs(x = "Hour in a day",  y = "Participants")
+```
+Here, we can find out that there are some blank cells in the visualization, which means the participants did not use the devices during that time period. We can see the blank period are concentrated at the night times. It may be caused by user habits or the devices need to be recharged.
+We cannot find out the root cause of the blank cells with current data, and need more investigation like questionnaires.

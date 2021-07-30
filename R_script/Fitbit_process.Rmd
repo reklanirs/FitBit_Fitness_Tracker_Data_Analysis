@@ -1,0 +1,106 @@
+---
+title: "Fitbit data process"
+author: "Ken"
+date: '2021-07-28'
+output: html_document
+---
+
+Analyze smart device data to gain insight into how consumers are using their smart devices.
+
+```{r}
+library(tidyverse)
+```
+
+Define file paths:
+
+```{r predefine, echo=FALSE, message=FALSE}
+hourly_prefix <- '../Fitabase_Data_4.12.16-5.12.16/Hourly/'
+hourly_files <- c('hourlyCalories_merged', 'hourlyIntensities_merged', 'hourlySteps_merged')
+```
+
+## Clean hourly files
+
+There are three hourly files: `hourlyCalories_merged.csv`, `hourlyIntensities_merged.csv` and `hourlySteps_merged`.
+
+```{r load_hourly, echo=FALSE, message=FALSE}
+hourly_calories <- read_csv(paste0(hourly_prefix, hourly_files[1], '.csv'))
+hourly_intensities <- read_csv(paste0(hourly_prefix, hourly_files[2], '.csv'))
+hourly_steps <- read_csv(paste0(hourly_prefix, hourly_files[3], '.csv'))
+# str(hourly_calories)
+# str(hourly_intensities)
+# str(hourly_steps)
+```
+
+As all three files have the same number of rows and the subjects are highly connected, we want to connect three files into one file first. Rows with same `Id` and `ActivityHour` should be combined together. It can be done by `VLOOKUP` in spreadsheets or `JOIN` in SQL.
+
+In R, we will use the `merge` function.
+
+```{r merge_hourly_tables}
+merged <- hourly_intensities %>% 
+  merge(hourly_calories, by=c("Id", "ActivityHour")) %>% 
+  merge(hourly_steps, by=c("Id", "ActivityHour"))
+```
+
+View our merged dataset:
+
+```{r check_hourly_merged}
+glimpse(merged)
+```
+
+And save the new merged hourly data:
+
+```{r save_hourly_merged}
+write_csv(merged, "Hourly_merged.csv")
+```
+
+## Clean Daily files
+
+There are five files inside the daily group. Let's define their paths first:
+
+```{r predefine2, echo=FALSE, message=FALSE}
+daily_prefix <- '../Fitabase_Data_4.12.16-5.12.16/Daily/'
+daily_files <- c('dailyActivity_merged', 'dailyCalories_merged', 'dailyIntensities_merged', 'dailySteps_merged', 'sleepDay_merged')
+```
+
+Load the files into the memory:
+
+```{r load_daily, echo=FALSE, message=FALSE}
+daily_activity <- read_csv(paste0(daily_prefix, daily_files[1], '.csv'))
+daily_calories <- read_csv(paste0(daily_prefix, daily_files[2], '.csv'))
+daily_intensities <- read_csv(paste0(daily_prefix, daily_files[3], '.csv'))
+daily_steps <- read_csv(paste0(daily_prefix, daily_files[4], '.csv'))
+daily_sleep <- read_csv(paste0(daily_prefix, daily_files[5], '.csv'))
+```
+
+As what we did for hourly files, we also want to merge daily files into one.
+
+However, we can see that `daily_sleep` only have 413 rows while others have 940 rows. And about the date field, in some data frame it is called `ActivityDate` but in another `ActivityDay` or `SleepDay`.
+
+Furthermore, in `daily_sleep` we found that the date column contains useless "12:00:00 AM" suffix, which is inconsistent with others.
+
+We need to make them consistent.
+
+```{r consistent_daily}
+daily_activity <- rename(daily_activity, ActivityDay=ActivityDate)
+daily_sleep <- daily_sleep %>% 
+  rename(ActivityDay=SleepDay) %>% 
+  mutate(ActivityDay=substr(ActivityDay, 1, str_locate(ActivityDay, ' ')[1]-1))
+```
+
+Then, join five tables.
+
+```{r merge_daily}
+merged_daily <- daily_activity %>% 
+  merge(daily_calories, by=c('Id','ActivityDay')) %>% 
+  merge(daily_intensities, by=c('Id','ActivityDay')) %>% 
+  merge(daily_steps, by=c('Id','ActivityDay')) %>% 
+  merge(daily_sleep, by=c('Id','ActivityDay'), all.x=TRUE)
+```
+
+In fact, if we view the merged data frame here, we can find that a lot of records in sleep fileds are NA, because the `daily_sleep` dataset does not have enough records we need. It will be too aggressive if we drop all NA rows becuase over a half of the rows will disappear, so I just keep them all here for further exploration.
+
+And finally, save the new merged daily file:
+
+```{r save_merged_daily}
+write_csv(merged_daily, 'Daily_merged.csv')
+```

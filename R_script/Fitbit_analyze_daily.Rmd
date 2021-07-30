@@ -1,0 +1,102 @@
+---
+title: "Fitbit data analyze"
+output: html_notebook
+author: "Ken"
+date: '2021-07-28'
+---
+
+## Loading common packages and libraries
+
+```{r load_ibraries}
+library(tidyverse)
+```
+
+## Loading CSV files
+
+```{r load_csv}
+daily <- read_csv('../Cleaned_data/Daily_merged_v0.2.csv')
+```
+
+## Exploring the table
+
+**Head of the table:**
+
+```{r}
+head(daily)
+```
+
+**Identidy column names:**
+
+```{r}
+colnames(daily)
+```
+
+## Summary Statistics
+
+**Total number of participants and records:**
+
+```{r}
+print(paste('participants:', n_distinct(daily$Id)))
+print(paste('records:', nrow(daily)))
+```
+
+**Summary of some interesting columns:**
+
+```{r}
+daily %>%  
+  select(TotalSteps,
+         TotalDistance,
+         SedentaryMinutes,
+         Calories) %>%
+  summary()
+```
+
+**Summary of sleep information**
+
+```{r}
+daily %>% 
+  drop_na() %>% 
+  select(TotalSleepRecords, TotalMinutesAsleep, TotalTimeInBed) %>% 
+  summary()
+```
+
+## Relationship and Plotting
+
+First, let's see the relationship between `TotalSteps` and `Calories`. We assume it should be a linear relation:
+
+```{r}
+daily %>% ggplot(aes(x=TotalSteps, y=Calories)) + geom_point() + geom_smooth()
+```
+
+And we found that even though the relationship between two variables is linear, as the increase of the `TotalSteps`, the efficiency of `Calories` consuming has a little bit of decrease.
+
+Let's have a look at the `TotalMinnutesAsleep` to see how long the participants sleep.
+
+```{r}
+daily %>% ggplot(aes(x=TotalMinutesAsleep)) +  geom_histogram()
+```
+
+We can see that generally the sleep record is between 200 and 600 minutes, and most of the participants have about 450 minutes of sleep a day.
+
+We cannot control how long a customer sleep, but we may be able to help customers fall asleep faster. Let's see how long the participants in bed but not asleep. Because customers may have more than one sleep records a day, we need to divide the time by the number of records:
+
+```{r}
+daily %>% ggplot(aes(x=(TotalTimeInBed - TotalMinutesAsleep)/TotalSleepRecords)) +  geom_histogram()
+```
+Seems most of the participants fall asleep within 50 mins.
+Then, let's look at the relationship between TotalTimeInBed but not asleep, and TotalSteps:
+
+```{r}
+ggplot(data=daily, aes(x=TotalSteps, y=(TotalTimeInBed - TotalMinutesAsleep)/TotalSleepRecords)) + geom_point() + geom_smooth()
+```
+
+Unfortunately, there seems no obvious relationship between these two. What about SedentaryMinutes?
+
+```{r}
+ggplot(data=daily, aes(x=SedentaryMinutes, y=(TotalTimeInBed - TotalMinutesAsleep)/TotalSleepRecords)) + geom_point() + geom_smooth()
+
+daily %>% drop_na() %>%  filter(TotalSleepRecords == 1) %>% 
+ggplot(aes(x=SedentaryMinutes, y=(TotalTimeInBed - TotalMinutesAsleep) )) + geom_point() + geom_smooth()
+```
+
+This time, we can see that as the increasing of `SedentaryMinutes`, participants fall asleep faster. Which inspire us to add meditation or deep breath function into the Bellabeat app to help customers have more sedentary time to fall asleep faster.
